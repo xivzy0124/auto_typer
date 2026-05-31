@@ -1,0 +1,7 @@
+{
+  "mean_delay_ms": 60,
+  "delay_std_ms": 30,
+  "mistake_rate": 0.1,
+  "extra_pause": true,
+  "vscode_use_auto_close_braces": true
+}

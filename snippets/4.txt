@@ -1,0 +1,7 @@
+    const snapshot = BluetoothBleManager.clonePressureSnapshot(BluetoothBleManager.latestPressureSnapshot);
+    snapshot.leftPressures = leftPressures; 
+	  snapshot.rightPressures = rightPressures;
+    snapshot.leftUpdatedAt = timestamp;
+	  snapshot.rightUpdatedAt = timestamp;
+    snapshot.allPressures = leftPressures.concat(rightPressures);
+    return snapshot;

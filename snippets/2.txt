@@ -1,0 +1,5 @@
+    const pressures: number[] = [];
+    for (let index = 2; index < FOOT_PRESSURE_PACKET_SIZE - 1; index += 2) {
+      const value = ((packet[index] & 0xff) << 8) + (packet[index + 1] & 0xff);
+      pressures.push(value);
+    }

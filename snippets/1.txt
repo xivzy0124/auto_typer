@@ -1,0 +1,10 @@
+  private static isValidFootPressurePacket(packet: number[]): boolean {
+    if (packet.length !== FOOT_PRESSURE_PACKET_SIZE) {
+      return false;
+    }
+    let checksum = 0;
+    for (let index = 0; index < FOOT_PRESSURE_PACKET_SIZE - 1; index += 1) {
+      checksum += packet[index] & 0xFF;
+    }
+    return (checksum & 0xff) === (packet[FOOT_PRESSURE_PACKET_SIZE - 1] & 0xff);
+  }
