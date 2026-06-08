@@ -5,13 +5,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
 # ─── 检查 Python 3 ─────────────────────────────────────────────────────────────
-if ! command -v python3 &>/dev/null; then
+# 优先使用 Homebrew 安装的 python3.13（兼容性最好）
+PYTHON=""
+for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$PYTHON" ]]; then
     echo "[错误] 未找到 python3，请先安装 Python 3.9+"
     exit 1
 fi
 
-PY_VER=$(python3 -c "import sys; print(sys.version_info.minor)")
-if [[ $PY_VER -lt 9 ]]; then
+PY_VER=$($PYTHON -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "[信息] 使用 $PYTHON ($PY_VER)"
+
+PY_MINOR=$($PYTHON -c "import sys; print(sys.version_info.minor)")
+if [[ $PY_MINOR -lt 9 ]]; then
     echo "[错误] 需要 Python 3.9+，当前版本过低"
     exit 1
 fi
@@ -19,7 +31,7 @@ fi
 # ─── 创建/激活虚拟环境 ─────────────────────────────────────────────────────────
 if [[ ! -d "$VENV_DIR" ]]; then
     echo "[安装] 创建虚拟环境..."
-    python3 -m venv "$VENV_DIR"
+    $PYTHON -m venv "$VENV_DIR"
 fi
 
 source "$VENV_DIR/bin/activate"
@@ -47,8 +59,9 @@ echo "    系统设置 → 隐私与安全性 → 辅助功能"
 echo "    将「终端」或「iTerm」添加到允许列表"
 echo ""
 echo "  快捷键："
-echo "    Ctrl+Option+1/2/3/4  输入对应槽位代码"
+echo "    Ctrl+Option+1~9      输入对应槽位代码"
 echo "    Ctrl+Option+0        暂停 / 恢复"
+echo "    Ctrl+Option+-        重置（中断当前输入，可重新选择）"
 echo "    Ctrl+C               退出"
 echo "--------------------------------------------------"
 echo ""

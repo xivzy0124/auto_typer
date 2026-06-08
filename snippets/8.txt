@@ -1,0 +1,11 @@
+  static mergeCompensatedPressure(baseValue: number, candidateValue: number): number {
+  const normalizedBaseValue: number = FootPressureWeightCalculator.clampPressureValue(baseValue);
+  const normalizedCandidateValue: number = FootPressureWeightCalculator.clampPressureValue(candidateValue);
+  return normalizedCandidateValue > normalizedBaseValue ? normalizedCandidateValue : normalizedBaseValue;
+  }
+  private static isBluetoothEnabled(state: bluetoothManager.BluetoothState): boolean {
+    return state === bluetoothManager.BluetoothState.STATE_ON ||
+      state === bluetoothManager.BluetoothState.STATE_TURNING_ON ||
+      state === bluetoothManager.BluetoothState.STATE_BLE_ON ||
+      state === bluetoothManager.BluetoothState.STATE_BLE_TURNING_ON;
+  }

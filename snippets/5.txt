@@ -1,0 +1,20 @@
+  static async ensureBluetoothEnabled(context: common.UIAbilityContext): Promise<boolean> {
+    if (!BluetoothPermission.hasBluetoothPermission(context)) {
+      const granted = await BluetoothPermission.requestEnableBluetoothPermission(context);
+      if (!granted) {
+        return false;
+      }
+    }
+
+    try {
+      const state = bluetoothManager.getState();
+      if (BluetoothPermission.isBluetoothEnabled(state)) {
+        return true;
+      }
+
+      bluetoothManager.enableBluetooth();
+      return await BluetoothPermission.waitUntilBluetoothEnabled(BLUETOOTH_ENABLE_TIMEOUT_MS);
+    } catch {
+      return false;
+    }
+  }

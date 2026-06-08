@@ -1,0 +1,19 @@
+  private static async waitUntilBluetoothEnabled(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      if (BluetoothPermission.isBluetoothEnabled(bluetoothManager.getState())) {
+        return true;
+      }
+      await BluetoothPermission.sleep(BLUETOOTH_STATE_CHECK_INTERVAL_MS);
+    }
+    return BluetoothPermission.isBluetoothEnabled(bluetoothManager.getState());
+  }
+
+  private static async sleep(timeoutMs: number): Promise<void> {
+    await new Promise<void>((resolve: () => void): void => {
+      setTimeout((): void => {
+        resolve();
+      }, timeoutMs);
+    });
+
+  }

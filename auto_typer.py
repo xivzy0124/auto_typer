@@ -24,6 +24,7 @@ SNIPPETS_DIR = BASE_DIR / "snippets"
 
 kb = keyboard.Controller()
 is_paused = False
+abort_typing = False  # 重置标志：True 时中断当前输入
 pause_lock = threading.Lock()
 
 # ─── 配置 ───────────────────────────────────────────────────────────────────
@@ -41,15 +42,20 @@ def load_config():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
-# ① 添加 VK_4（数字键4的 macOS 虚拟键码）
+# macOS 虚拟键码：数字 0-9 + 减号(-)
 VK_0, VK_1, VK_2, VK_3, VK_4 = 29, 18, 19, 20, 21
-HOTKEY_DIGIT_VKS = {VK_0, VK_1, VK_2, VK_3, VK_4}
+VK_5, VK_6, VK_7, VK_8, VK_9 = 23, 22, 26, 28, 25
+VK_MINUS = 27
+SLOT_VKS = {1: VK_1, 2: VK_2, 3: VK_3, 4: VK_4, 5: VK_5,
+            6: VK_6, 7: VK_7, 8: VK_8, 9: VK_9}
+# 需要在锁屏期间被吞掉的热键键码（避免数字/减号落进 VS Code）
+HOTKEY_DIGIT_VKS = {VK_0, VK_MINUS} | set(SLOT_VKS.values())
 
 def load_snippets():
     SNIPPETS_DIR.mkdir(exist_ok=True)
     snippets = {}
-    # ③ range 改为 1..4，自动生成 4.txt
-    for i in range(1, 5):
+    # 槽位 1..9，自动生成缺失的 N.txt
+    for i in range(1, 10):
         path = SNIPPETS_DIR / f"{i}.txt"
         if path.exists():
             snippets[i] = path.read_text(encoding="utf-8")
@@ -258,8 +264,30 @@ def _next_line_auto_close_brace_end(text, newline_index):
         return index + 1
     return None
 
+def _pause_gate():
+    """阻塞直到恢复输入；返回 False 表示被重置，应中断。"""
+    while True:
+        with pause_lock:
+            if abort_typing:
+                return False
+            if not is_paused:
+                return True
+        time.sleep(0.02)
+
+def _sleep_interruptible(seconds):
+    """分片睡眠：一旦进入暂停/重置立刻返回，使暂停近乎即时生效。"""
+    end = time.monotonic() + seconds
+    while True:
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            return
+        with pause_lock:
+            if is_paused or abort_typing:
+                return
+        time.sleep(min(0.02, remaining))
+
 def type_text_human(text, config):
-    global is_paused
+    global is_paused, abort_typing
     mean = config.get("mean_delay_ms", 120)
     std = config.get("delay_std_ms", 40)
     mistake_rate = config.get("mistake_rate", 0.02)
@@ -268,15 +296,13 @@ def type_text_human(text, config):
     i = 0
     while i < len(text):
         ch = text[i]
-        while True:
-            with pause_lock:
-                if not is_paused:
-                    break
-            time.sleep(0.3)
         delay = max(25, random.gauss(mean, std)) / 1000.0
-        time.sleep(delay)
+        _sleep_interruptible(delay)
         if extra_pause and ch in '.,;:\n' and random.random() < 0.6:
-            time.sleep(random.uniform(0.2, 0.6))
+            _sleep_interruptible(random.uniform(0.2, 0.6))
+        # 真正落键前确认暂停状态：暂停时阻塞于此，不会再吐出字符
+        if not _pause_gate():
+            break
         if random.random() < mistake_rate and ch in MISTAKE_MAP:
             wrong = MISTAKE_MAP[ch]
             type_char(wrong, config)
@@ -293,11 +319,12 @@ def type_text_human(text, config):
             continue
         type_char(ch, config)
         i += 1
-    print("  输入完成!")
+    if abort_typing:
+        print("  [重置] 输入已中断")
+    else:
+        print("  输入完成!")
 
 # ─── 热键监听 ────────────────────────────────────────────────────────────────
-VK_0, VK_1, VK_2, VK_3 = 29, 18, 19, 20
-
 def start_listener(config, snippets):
     global is_paused
     is_typing = False
@@ -313,19 +340,38 @@ def start_listener(config, snippets):
             return ('vk', key.vk)
         return None
 
-    def _combo(target_vk):
-        return 'ctrl' in pressed_mods and 'alt' in pressed_mods and target_vk in pressed_vks
-
     def on_press(key):
-        global is_paused
+        global is_paused, abort_typing
         nonlocal is_typing
         n = _norm(key)
         if n in ('ctrl', 'alt'):
             pressed_mods.add(n)
-        elif isinstance(n, tuple):
-            pressed_vks.add(n[1])
+            return
+        if not isinstance(n, tuple):
+            return
 
-        if _combo(VK_0):
+        vk = n[1]
+        # 长按时系统会重复发送 keydown（无中间 keyup）。若该键已在按下集合中，
+        # 说明是自动重复，忽略它——否则一次长按会把暂停反复切换，表现为
+        # “恢复后只打一个字母又暂停”。
+        is_repeat = vk in pressed_vks
+        pressed_vks.add(vk)
+        if is_repeat:
+            return
+
+        if 'ctrl' not in pressed_mods or 'alt' not in pressed_mods:
+            return
+
+        if vk == VK_MINUS:
+            # 重置：中断当前输入并解除暂停，便于按错后重新选择
+            with pause_lock:
+                abort_typing = True
+                is_paused = False
+            kb_lock.unlock()
+            print(f"\n  [重置] Ctrl+Option+- — 已中断输入，可重新选择槽位")
+            return
+
+        if vk == VK_0:
             with pause_lock:
                 is_paused = not is_paused
                 paused_now = is_paused
@@ -337,8 +383,8 @@ def start_listener(config, snippets):
                 print(f"\n  [恢复] Ctrl+Option+0 — 键盘已重新锁定")
             return
 
-        for vk, slot in [(VK_1, 1), (VK_2, 2), (VK_3, 3), (VK_4, 4)]:
-            if _combo(vk):
+        for slot, slot_vk in SLOT_VKS.items():
+            if vk == slot_vk:
                 if is_typing:
                     print(f"  [跳过] 槽位{slot} - 正在输入中")
                     return
@@ -363,6 +409,9 @@ def start_listener(config, snippets):
 
     def _do_type(text, switched, slot):
         nonlocal is_typing
+        global abort_typing, is_paused
+        with pause_lock:
+            abort_typing = False
         try:
             time.sleep(0.05)
             if not kb_lock.suppresses_hotkeys:
@@ -374,13 +423,16 @@ def start_listener(config, snippets):
             type_text_human(text, config)
         finally:
             kb_lock.unlock()
+            with pause_lock:
+                abort_typing = False
+                is_paused = False
             is_typing = False
 
     print("[Auto Typer] 已启动")
     print(f"  延迟: {config.get('mean_delay_ms', 120)}±{config.get('delay_std_ms', 40)}ms")
     print(f"  手误率: {config.get('mistake_rate', 0.02)*100:.1f}%")
     print(f"  槽位: {', '.join(f'{k}({len(v)}字符)' for k, v in snippets.items())}")
-    print(f"  快捷键: Ctrl+Option+1/2/3/4 输入 | Ctrl+Option+0 暂停/恢复")
+    print(f"  快捷键: Ctrl+Option+1~9 输入 | Ctrl+Option+0 暂停/恢复 | Ctrl+Option+- 重置")
     if kb_lock.available:
         print(f"  键盘锁定: CGEventTap ✓ 系统级拦截就绪")
     else:

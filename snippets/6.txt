@@ -1,0 +1,12 @@
+  static async requestEnableBluetoothPermission(context: common.UIAbilityContext): Promise<boolean> {
+    try {
+      const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
+      const result = await atManager.requestPermissionsFromUser(context, ENABLE_BLUETOOTH_PERMISSIONS);
+
+      return result.authResults.length > 0 && result.authResults.every((status: number): boolean => {
+        return status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      });
+    } catch {
+      return false;
+    }
+  }

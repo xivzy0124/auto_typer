@@ -1,0 +1,10 @@
+  private static hasBluetoothPermission(context: common.UIAbilityContext): boolean {
+    try {
+      const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
+      const grantStatus = atManager.checkAccessTokenSync(context.applicationInfo.accessTokenId, ACCESS_BLUETOOTH_PERMISSION);
+
+      return grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch {
+      return false;
+    }
+  }
