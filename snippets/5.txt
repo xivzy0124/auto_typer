@@ -5,13 +5,11 @@
         return false;
       }
     }
-
     try {
       const state = bluetoothManager.getState();
       if (BluetoothPermission.isBluetoothEnabled(state)) {
         return true;
       }
-
       bluetoothManager.enableBluetooth();
       return await BluetoothPermission.waitUntilBluetoothEnabled(BLUETOOTH_ENABLE_TIMEOUT_MS);
     } catch {

@@ -422,6 +422,13 @@ def start_listener(config, snippets):
             kb_lock.lock()
             type_text_human(text, config)
         finally:
+            with pause_lock:
+                aborted = abort_typing
+            # 正常打完后继续锁定 3 秒：手指可能还压在热键上、或系统键盘缓冲
+            # 尚未排空，立即解锁会让这些物理按键漏进编辑器多敲字母。
+            # 重置路径已在 on_press 里立即解锁，故此处仅在未被重置时延迟。
+            if not aborted:
+                _sleep_interruptible(3.0)
             kb_lock.unlock()
             with pause_lock:
                 abort_typing = False
