@@ -64,6 +64,184 @@ def load_snippets():
             snippets[i] = path.read_text(encoding="utf-8")
     return snippets
 
+# ─── 输入法 (TIS) 与大小写 (IOKit) 底层控制 ─────────────────────────────────
+# TIS：直接选定英文键盘布局，比模拟 Ctrl+Space 可靠（不受“上一个输入源”二选一限制）。
+try:
+    import objc
+    from Foundation import NSBundle
+    _carbon = NSBundle.bundleWithPath_("/System/Library/Frameworks/Carbon.framework")
+    _tis = {}
+    objc.loadBundleFunctions(_carbon, _tis, [
+        ("TISCopyCurrentKeyboardInputSource", b"@"),
+        ("TISCreateInputSourceList", b"@@Z"),
+        ("TISSelectInputSource", b"i@"),
+        ("TISGetInputSourceProperty", b"@@@"),
+    ])
+    objc.loadBundleVariables(_carbon, _tis, [
+        ("kTISPropertyInputSourceID", b"@"),
+        ("kTISPropertyInputSourceType", b"@"),
+        ("kTISTypeKeyboardLayout", b"@"),
+    ])
+    _TIS_AVAILABLE = True
+except Exception as e:  # pragma: no cover - 取决于运行环境
+    _TIS_AVAILABLE = False
+    print(f"[警告] 输入法 TIS 接口不可用，回退快捷键切换: {e}")
+
+# IOKit：读取/关闭 Caps Lock。某些 macOS 不允许打开 IOHIDSystem，故关闭操作尽力而为。
+try:
+    import ctypes
+    import ctypes.util
+    _iokit = ctypes.CDLL(ctypes.util.find_library("IOKit"))
+    _iokit.IOServiceMatching.restype = ctypes.c_void_p
+    _iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
+    _iokit.IOServiceGetMatchingService.restype = ctypes.c_uint
+    _iokit.IOServiceGetMatchingService.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    _iokit.IOServiceOpen.restype = ctypes.c_int
+    _iokit.IOServiceOpen.argtypes = [
+        ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint)
+    ]
+    _iokit.IOServiceClose.restype = ctypes.c_int
+    _iokit.IOServiceClose.argtypes = [ctypes.c_uint]
+    _iokit.IOHIDSetModifierLockState.restype = ctypes.c_int
+    _iokit.IOHIDSetModifierLockState.argtypes = [ctypes.c_uint, ctypes.c_int, ctypes.c_bool]
+    _IOKIT_AVAILABLE = True
+except Exception:  # pragma: no cover
+    _IOKIT_AVAILABLE = False
+
+_ENGLISH_SOURCE = None  # 缓存找到的英文键盘布局，避免重复枚举
+
+def current_input_source_id():
+    if not _TIS_AVAILABLE:
+        return None
+    src = _tis["TISCopyCurrentKeyboardInputSource"]()
+    if src is None:
+        return None
+    return _tis["TISGetInputSourceProperty"](src, _tis["kTISPropertyInputSourceID"])
+
+def is_english_source(sid=None):
+    """仅把纯英文键盘布局视为英文；任何 inputmethod（含搜狗 ABC 模式）都视为非英文，
+    强制切到纯布局，保证落键一定是 ASCII。"""
+    if sid is None:
+        sid = current_input_source_id()
+    if not sid:
+        return False
+    low = sid.lower()
+    if "inputmethod" in low:
+        return False
+    english = ['keylayout.abc', 'keylayout.us', 'keylayout.american',
+               'keylayout.british', 'keylayout.australian', 'keylayout.dvorak',
+               'keylayout.colemak']
+    return any(e in low for e in english)
+
+def _find_english_source():
+    global _ENGLISH_SOURCE
+    if _ENGLISH_SOURCE is not None:
+        return _ENGLISH_SOURCE
+    if not _TIS_AVAILABLE:
+        return None
+    lst = _tis["TISCreateInputSourceList"](
+        {_tis["kTISPropertyInputSourceType"]: _tis["kTISTypeKeyboardLayout"]}, False)
+    fallback = None
+    for s in (lst or []):
+        sid = (_tis["TISGetInputSourceProperty"](s, _tis["kTISPropertyInputSourceID"]) or "")
+        low = sid.lower()
+        if low.endswith(".abc"):
+            _ENGLISH_SOURCE = s          # 优先 ABC
+            return s
+        if is_english_source(sid) and fallback is None:
+            fallback = s
+    _ENGLISH_SOURCE = fallback
+    return fallback
+
+def _select_english_source():
+    """切到英文键盘布局，返回是否成功（不打印）。"""
+    src = _find_english_source()
+    if src is None or not _TIS_AVAILABLE:
+        return False
+    _tis["TISSelectInputSource"](src)
+    return True
+
+def caps_lock_on():
+    if not _QUARTZ_AVAILABLE:
+        return False
+    flags = Quartz.CGEventSourceFlagsState(Quartz.kCGEventSourceStateHIDSystemState)
+    return bool(flags & Quartz.kCGEventFlagMaskAlphaShift)
+
+def set_caps_lock(state):
+    if not _IOKIT_AVAILABLE:
+        return False
+    service = _iokit.IOServiceGetMatchingService(0, _iokit.IOServiceMatching(b"IOHIDSystem"))
+    if not service:
+        return False
+    conn = ctypes.c_uint(0)
+    if _iokit.IOServiceOpen(service, 0, 0, ctypes.byref(conn)) != 0:
+        return False
+    try:
+        return _iokit.IOHIDSetModifierLockState(conn.value, 0, bool(state)) == 0
+    finally:
+        _iokit.IOServiceClose(conn.value)
+
+def ensure_caps_off(verbose=False):
+    if not caps_lock_on():
+        return
+    set_caps_lock(False)  # 多数新版 macOS 禁止开启 IOHIDSystem，故尽力而为
+    if caps_lock_on():
+        if verbose:
+            print("  [大小写] Caps Lock 开启（系统不允许自动关闭）；"
+                  "自动输入用 Unicode 注入，输出不受影响。")
+    elif verbose:
+        print("  [大小写] 已关闭 Caps Lock")
+
+def ensure_english(verbose=False):
+    """确保当前为英文键盘布局。返回 True 表示执行了切换。"""
+    if is_english_source():
+        if verbose:
+            print(f"  [输入法] 已是英文 ({current_input_source_id()})")
+        return False
+    if not _TIS_AVAILABLE:
+        return _legacy_switch_to_english()
+    cur = current_input_source_id()
+    ok = _select_english_source()
+    time.sleep(0.05)
+    if verbose:
+        if ok and is_english_source():
+            print(f"  [输入法] 已从 {cur} 切换到 {current_input_source_id()}")
+        else:
+            print(f"  [输入法] ⚠ 无法切换到英文（当前 {current_input_source_id()}），请手动切换")
+    return ok
+
+def prepare_for_typing():
+    """每次输入前的统一检查：关大写 + 切英文。返回是否切换过输入法。"""
+    ensure_caps_off(verbose=True)
+    return ensure_english(verbose=True)
+
+# ─── 输入守卫：锁定期间持续把输入法/大小写钉回英文 ────────────────────────────
+# CGEventTap 屏蔽物理按键，但中英文切换热键（Ctrl+Space / Caps Lock / 地球键）可能
+# 由系统在会话级 tap 之前处理而漏过。守卫线程在锁定期间持续复位，使任何偷切立刻弹回。
+_guard_thread = None
+_guard_stop = threading.Event()
+
+def _input_guard_loop():
+    while not _guard_stop.is_set():
+        try:
+            if not is_english_source():
+                _select_english_source()  # 偷切回中文立刻弹回英文
+        except Exception:
+            pass
+        _guard_stop.wait(0.1)
+
+def start_input_guard():
+    global _guard_thread
+    if not (_TIS_AVAILABLE or _IOKIT_AVAILABLE):
+        return
+    _guard_stop.clear()
+    if _guard_thread is None or not _guard_thread.is_alive():
+        _guard_thread = threading.Thread(target=_input_guard_loop, daemon=True)
+        _guard_thread.start()
+
+def stop_input_guard():
+    _guard_stop.set()
+
 # ─── CGEventTap 键盘锁 ───────────────────────────────────────────────────────
 class KeyboardLock:
     """
@@ -153,11 +331,13 @@ class KeyboardLock:
     def lock(self):
         with self._lock:
             self._locked = True
-        print("  [键盘已锁定] 物理按键已屏蔽")
+        start_input_guard()  # 锁定期间持续钉住英文/关大写，封死中英文切换
+        print("  [键盘已锁定] 物理按键已屏蔽，中英文切换已封锁")
 
     def unlock(self):
         with self._lock:
             self._locked = False
+        stop_input_guard()
         print("  [键盘已解锁]")
 
     @property
@@ -170,8 +350,8 @@ class KeyboardLock:
 
 kb_lock = KeyboardLock()
 
-# ─── 输入法检测与切换 ────────────────────────────────────────────────────────
-def check_and_switch_to_english():
+# ─── 输入法检测与切换（TIS 不可用时的回退：读 defaults + 模拟 Ctrl+Space）─────
+def _legacy_switch_to_english():
     try:
         result = subprocess.run(
             ["defaults", "export", "com.apple.HIToolbox", "-"],
@@ -231,8 +411,18 @@ def _clear_vscode_autoindent():
     time.sleep(0.02)
 
 def _type_literal(char):
-    kb.press(keyboard.KeyCode.from_char(char))
-    kb.release(keyboard.KeyCode.from_char(char))
+    # 直接以 Unicode 注入字符：绕过“键码→字符”翻译，使输出完全不受 Caps Lock
+    # 与键盘布局影响（'a' 永远是 'a'，'A' 永远是 'A'）。事件由本进程发出 pid!=0，
+    # 因此能通过键盘锁的 CGEventTap（只丢弃 pid==0 的物理按键）。
+    if _QUARTZ_AVAILABLE:
+        for is_down in (True, False):
+            ev = Quartz.CGEventCreateKeyboardEvent(None, 0, is_down)
+            Quartz.CGEventSetFlags(ev, 0)  # 清掉 alphaShift/shift 等所有修饰标志
+            Quartz.CGEventKeyboardSetUnicodeString(ev, len(char), char)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+    else:
+        kb.press(keyboard.KeyCode.from_char(char))
+        kb.release(keyboard.KeyCode.from_char(char))
 
 def type_newline():
     _press(keyboard.Key.esc)
@@ -392,7 +582,7 @@ def start_listener(config, snippets):
                     print(f"  [空] 槽位{slot} 无内容，请编辑 snippets/{slot}.txt")
                     return
                 is_typing = True
-                switched = check_and_switch_to_english()
+                switched = prepare_for_typing()
                 threading.Thread(
                     target=_do_type,
                     args=(snippets[slot], switched, slot),
@@ -445,7 +635,7 @@ def start_listener(config, snippets):
     else:
         print(f"  键盘锁定: ✗ 不可用（pip install pyobjc-framework-Quartz 后重启）")
     print(f"  按 Ctrl+C 退出\n")
-    check_and_switch_to_english()
+    prepare_for_typing()
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
 
