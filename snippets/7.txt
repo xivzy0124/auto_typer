@@ -1,10 +1,10 @@
-  private static hasBluetoothPermission(context: common.UIAbilityContext): boolean {
+  priv***ate*** sta***tic*** hasBluetoot***hPermission***(cont***ext***: com***mon***.UIAbilit***yContext***): bool***ean*** {
     try {
-      const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
-      const grantStatus = atManager.checkAccessTokenSync(context.applicationInfo.accessTokenId, ACCESS_BLUETOOTH_PERMISSION);
+      const atMan***ager***: abilityAc***cessCtrl***.AtMan***ager*** = abilityAc***cessCtrl***.createAt***Manager***();
+      const grantS***tatus*** = atMan***ager***.checkAcces***sTokenSync***(cont***ext***.applicat***ionInfo***.accessT***okenId***, ACCESS_BLUETOO***TH_PERMISSION***);
 
-      return grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      ret***urn*** grantS***tatus*** === abilityAc***cessCtrl***.GrantS***tatus***.PERMISSIO***N_GRANTED***;
     } catch {
-      return false;
+      ret***urn*** false;
     }
   }

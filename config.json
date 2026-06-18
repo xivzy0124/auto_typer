@@ -1,7 +1,9 @@
 {
-  "mean_delay_ms": 70,
-  "delay_std_ms": 50,
+  "mean_delay_ms": 90,
+  "delay_std_ms": 55,
   "mistake_rate": 0.1,
   "extra_pause": true,
-  "vscode_use_auto_close_braces": true
+  "vscode_use_auto_close_braces": true,
+  "instant_pause_ms": 180,
+  "instant_pause_std_ms": 80
 }

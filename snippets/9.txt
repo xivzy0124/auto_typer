@@ -1,19 +1,19 @@
-  private static async waitUntilBluetoothEnabled(timeoutMs: number): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() <= deadline) {
-      if (BluetoothPermission.isBluetoothEnabled(bluetoothManager.getState())) {
-        return true;
+  priv***ate*** sta***tic*** async waitUntilBlue***toothEnabled***(timeo***utMs***: num***ber***): Prom***ise***<bool***ean***> {
+    const dead***line*** = Date.now() + timeo***utMs***;
+    while (Date.now() <= dead***line***) {
+      if (BluetoothP***ermission***.isBluetoo***thEnabled***(bluetoot***hManager***.getS***tate***())) {
+        ret***urn*** true;
       }
-      await BluetoothPermission.sleep(BLUETOOTH_STATE_CHECK_INTERVAL_MS);
+      await BluetoothP***ermission***.sleep(BLUETOOTH_STATE_C***HECK_INTERVAL_MS***);
     }
-    return BluetoothPermission.isBluetoothEnabled(bluetoothManager.getState());
+    ret***urn*** BluetoothP***ermission***.isBluetoo***thEnabled***(bluetoot***hManager***.getS***tate***());
   }
 
-  private static async sleep(timeoutMs: number): Promise<void> {
-    await new Promise<void>((resolve: () => void): void => {
-      setTimeout((): void => {
-        resolve();
-      }, timeoutMs);
+  priv***ate*** sta***tic*** async sleep(timeo***utMs***: num***ber***): Prom***ise***<void> {
+    await new Prom***ise***<void>((reso***lve***: () => void): void => {
+      setTi***meout***((): void => {
+        reso***lve***();
+      }, timeo***utMs***);
     });
 
   }

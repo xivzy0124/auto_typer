@@ -424,6 +424,19 @@ def _type_literal(char):
         kb.press(keyboard.KeyCode.from_char(char))
         kb.release(keyboard.KeyCode.from_char(char))
 
+INSTANT_MARK = "***"  # 片段里被 *** *** 包裹的内容会整块瞬间输出（不逐字慢打）
+
+def _type_chunk_instant(text, config):
+    """把 *** *** 之间的内容整块输出：单行直接一次 Unicode 注入瞬间出现；
+    含换行/制表则逐字快打（复用既有换行处理），同样不加人类化延迟。"""
+    if not text:
+        return
+    if "\n" not in text and "\t" not in text and _QUARTZ_AVAILABLE:
+        _type_literal(text)  # 一次性注入整串，瞬间蹦出
+    else:
+        for ch in text:
+            type_char(ch, config)
+
 def type_newline():
     _press(keyboard.Key.esc)
     time.sleep(0.03)
@@ -482,9 +495,26 @@ def type_text_human(text, config):
     std = config.get("delay_std_ms", 40)
     mistake_rate = config.get("mistake_rate", 0.02)
     extra_pause = config.get("extra_pause", True)
+    instant_pause_ms = config.get("instant_pause_ms", 400)      # *** 整块输出前先顿一下
+    instant_pause_std_ms = config.get("instant_pause_std_ms", 150)
     print(f"  开始输入 ({len(text)} 字符)...")
     i = 0
     while i < len(text):
+        # *** 标记：把包裹的内容整块瞬间输出，*** 本身不打出来
+        if text.startswith(INSTANT_MARK, i):
+            end = text.find(INSTANT_MARK, i + len(INSTANT_MARK))
+            if end != -1:
+                if not _pause_gate():
+                    break
+                # 先顿一下，像"想了一下"再把整块补出来，不至于太突兀
+                pause_s = max(0.0, random.gauss(instant_pause_ms, instant_pause_std_ms)) / 1000.0
+                _sleep_interruptible(pause_s)
+                if not _pause_gate():
+                    break
+                _type_chunk_instant(text[i + len(INSTANT_MARK):end], config)
+                i = end + len(INSTANT_MARK)
+                continue
+            # 没有闭合的 ***，按普通字符处理（原样打出星号）
         ch = text[i]
         delay = max(25, random.gauss(mean, std)) / 1000.0
         _sleep_interruptible(delay)

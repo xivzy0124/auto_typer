@@ -1,5 +1,5 @@
-  static mergeCompensatedPressure(baseValue: number, candidateValue: number): number {
-  const normalizedBaseValue: number = FootPressureWeightCalculator.clampPressureValue(baseValue);
-  const normalizedCandidateValue: number = FootPressureWeightCalculator.clampPressureValue(candidateValue);
-  return normalizedCandidateValue > normalizedBaseValue ? normalizedCandidateValue : normalizedBaseValue;
+  sta***tic*** mergeCompens***atedPressure***(baseV***alue***: num***ber***, candida***teValue***: num***ber***): num***ber*** {
+  const normalized***BaseValue***: num***ber*** = FootPressureWe***ightCalculator***.clampPres***sureValue***(baseV***alue***);
+  const normalizedCa***ndidateValue***: num***ber*** = FootPressureWe***ightCalculator***.clampPres***sureValue***(candida***teValue***);
+  ret***urn*** normalizedCa***ndidateValue*** > normalized***BaseValue*** ? normalizedCa***ndidateValue*** : normalized***BaseValue***;
   }

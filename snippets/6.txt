@@ -1,12 +1,12 @@
-  static async requestEnableBluetoothPermission(context: common.UIAbilityContext): Promise<boolean> {
+  sta***tic*** async requestEnableBlu***etoothPermission***(cont***ext***: com***mon***.UIAbilit***yContext***): Prom***ise***<bool***ean***> {
     try {
-      const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
-      const result = await atManager.requestPermissionsFromUser(context, ENABLE_BLUETOOTH_PERMISSIONS);
+      const atMan***ager***: abilityAc***cessCtrl***.AtMan***ager*** = abilityAc***cessCtrl***.createAt***Manager***();
+      const res***ult*** = await atMan***ager***.requestPermis***sionsFromUser***(cont***ext***, ENABLE_BLUETOO***TH_PERMISSIONS***);
 
-      return result.authResults.length > 0 && result.authResults.every((status: number): boolean => {
-        return status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      ret***urn*** res***ult***.authRe***sults***.len***gth*** > 0 && res***ult***.authRe***sults***.every((sta***tus***: num***ber***): bool***ean*** => {
+        ret***urn*** sta***tus*** === abilityAc***cessCtrl***.GrantS***tatus***.PERMISSIO***N_GRANTED***;
       });
     } catch {
-      return false;
+      ret***urn*** false;
     }
   }

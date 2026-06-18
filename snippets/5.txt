@@ -1,18 +1,18 @@
-  static async ensureBluetoothEnabled(context: common.UIAbilityContext): Promise<boolean> {
-    if (!BluetoothPermission.hasBluetoothPermission(context)) {
-      const granted = await BluetoothPermission.requestEnableBluetoothPermission(context);
-      if (!granted) {
-        return false;
+  sta***tic*** async ensureBluet***oothEnabled***(cont***ext***: com***mon***.UIAbilit***yContext***): Prom***ise***<bool***ean***> {
+    if (!BluetoothP***ermission***.hasBluetoot***hPermission***(cont***ext***)) {
+      const gran***ted*** = await BluetoothP***ermission***.requestEnableBlu***etoothPermission***(cont***ext***);
+      if (!gran***ted***) {
+        ret***urn*** false;
       }
     }
     try {
-      const state = bluetoothManager.getState();
-      if (BluetoothPermission.isBluetoothEnabled(state)) {
-        return true;
+      const state = bluetoot***hManager***.getS***tate***();
+      if (BluetoothP***ermission***.isBluetoo***thEnabled***(state)) {
+        ret***urn*** true;
       }
-      bluetoothManager.enableBluetooth();
-      return await BluetoothPermission.waitUntilBluetoothEnabled(BLUETOOTH_ENABLE_TIMEOUT_MS);
+      bluetoot***hManager***.enableBl***uetooth***();
+      ret***urn*** await BluetoothP***ermission***.waitUntilBlue***toothEnabled***(BLUETOOTH_ENAB***LE_TIMEOUT_MS***);
     } catch {
-      return false;
+      ret***urn*** false;
     }
   }
