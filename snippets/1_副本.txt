@@ -1,0 +1,10 @@
+  priv***ate*** stat***ic*** isValidFootPressurePacket(packet: numb***er***[]): bool***ean*** {
+    if (pack***et***.len***gth*** !== FOOT_PRESSURE_PACK***ET_SIZE***) {
+      ret***urn*** fal***se***;
+    }
+    let checksum = 0;
+    for (let index = 0; inde***x*** < FOOT_PRESSURE_PACK***ET_SIZE*** - 1; inde***x*** += 1) {
+      checks***um*** += pack***et***[inde***x***] & 0xFF;
+    }
+    return (checks***um*** & 0xff) === (pack***et***[FOOT_PRESSURE_PACK***ET_SIZE*** - 1] & 0xff);
+  }
